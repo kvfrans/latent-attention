@@ -59,6 +59,8 @@ class LatentAttention():
         visualization = self.mnist.train.next_batch(self.batchsize)[0]
         reshaped_vis = visualization.reshape(self.batchsize,28,28)
         ims("results/base.jpg",merge(reshaped_vis[:64],[8,8]))
+
+        visualization = visualization.reshape(self.batchsize,28,28,1)
         # train
         saver = tf.train.Saver(max_to_keep=2)
         with tf.Session() as sess:
@@ -66,6 +68,7 @@ class LatentAttention():
             for epoch in range(10):
                 for idx in range(int(self.n_samples / self.batchsize)):
                     batch = self.mnist.train.next_batch(self.batchsize)[0]
+                    batch = batch.reshape(-1,28,28,1)
                     _, gen_loss, lat_loss = sess.run((self.optimizer, self.generation_loss, self.latent_loss), feed_dict={self.images: batch})
                     # dumb hack to print cost every epoch
                     if idx % (self.n_samples - 3) == 0:
