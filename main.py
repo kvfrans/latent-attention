@@ -15,17 +15,17 @@ class LatentAttention():
         self.n_hidden = 500
         self.n_z = 20
         self.batchsize = 100
+        self.num_colors = 1
+        self.img_dim = 28
 
-        self.images = tf.placeholder(tf.float32, [None, 784])
-        image_matrix = tf.reshape(self.images,[-1, 28, 28, 1])
-        z_mean, z_stddev = self.recognition(image_matrix)
+        self.images = tf.placeholder(tf.float32, [None, self.img_dim, self.img_dim, self.num_colors])
+        z_mean, z_stddev = self.recognition(self.images)
         samples = tf.random_normal([self.batchsize,self.n_z],0,1,dtype=tf.float32)
         guessed_z = z_mean + (z_stddev * samples)
 
         self.generated_images = self.generation(guessed_z)
-        generated_flat = tf.reshape(self.generated_images, [self.batchsize, 28*28])
 
-        self.generation_loss = -tf.reduce_sum(self.images * tf.log(1e-8 + generated_flat) + (1-self.images) * tf.log(1e-8 + 1 - generated_flat),1)
+        self.generation_loss = -tf.reduce_sum(self.images * tf.log(1e-8 + self.generated_images) + (1-self.images) * tf.log(1e-8 + 1 - self.generated_images),1)
 
         self.latent_loss = 0.5 * tf.reduce_sum(tf.square(z_mean) + tf.square(z_stddev) - tf.log(tf.square(z_stddev)) - 1,1)
         self.cost = tf.reduce_mean(self.generation_loss + self.latent_loss)
