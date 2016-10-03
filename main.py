@@ -25,7 +25,10 @@ class LatentAttention():
 
         self.generated_images = self.generation(guessed_z)
 
-        self.generation_loss = -tf.reduce_sum(self.images * tf.log(1e-8 + self.generated_images) + (1-self.images) * tf.log(1e-8 + 1 - self.generated_images),1)
+        self.images_flat = tf.reshape(self.images, [-1, self.img_dim*self.img_dim*self.num_colors])
+        self.generated_images_flat = tf.reshape(self.generated_images, [-1, self.img_dim*self.img_dim*self.num_colors])
+
+        self.generation_loss = -tf.reduce_sum(self.images_flat * tf.log(1e-8 + self.generated_images_flat) + (1-self.images_flat) * tf.log(1e-8 + 1 - self.generated_images_flat),1)
 
         self.latent_loss = 0.5 * tf.reduce_sum(tf.square(z_mean) + tf.square(z_stddev) - tf.log(tf.square(z_stddev)) - 1,1)
         self.cost = tf.reduce_mean(self.generation_loss + self.latent_loss)
