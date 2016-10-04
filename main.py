@@ -6,6 +6,7 @@ import os
 from scipy.misc import imsave as ims
 from utils import *
 from ops import *
+from glob import glob
 
 class LatentAttention():
     def __init__(self):
