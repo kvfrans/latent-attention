@@ -14,10 +14,10 @@ class LatentAttention():
         self.n_samples = self.mnist.train.num_examples
 
         self.n_hidden = 500
-        self.n_z = 20
+        self.n_z = 32
         self.batchsize = 100
-        self.num_colors = 1
-        self.img_dim = 28
+        self.num_colors = 3
+        self.img_dim = 64
 
         self.images = tf.placeholder(tf.float32, [None, self.img_dim, self.img_dim, self.num_colors])
         z_mean, z_stddev = self.recognition(self.images)
@@ -39,22 +39,24 @@ class LatentAttention():
     # encoder
     def recognition(self, input_images):
         with tf.variable_scope("recognition"):
-            h1 = lrelu(conv2d(input_images, 1, 16, "d_h1")) # 28x28x1 -> 14x14x16
-            h2 = lrelu(conv2d(h1, 16, 32, "d_h2")) # 14x14x16 -> 7x7x32
-            h2_flat = tf.reshape(h2,[self.batchsize, 7*7*32])
+            h1 = lrelu(conv2d(input_images, 1, 16, "d_h1")) # 64x64x1 -> 32x32x16
+            h2 = lrelu(conv2d(h1, 16, 32, "d_h2")) # 32x32x16 -> 16x16x32
+            h2 = lrelu(conv2d(h1, 16, 32, "d_h3")) # 16x16x32 -> 8x8x64
+            flattened = tf.reshape(h2,[self.batchsize, 8*8*64])
 
-            w_mean = dense(h2_flat, 7*7*32, self.n_z, "w_mean")
-            w_stddev = dense(h2_flat, 7*7*32, self.n_z, "w_stddev")
+            w_mean = dense(flattened, 8*8*64, self.n_z, "w_mean")
+            w_stddev = dense(flattened, 8*8*64, self.n_z, "w_stddev")
 
         return w_mean, w_stddev
 
     # decoder
     def generation(self, z):
         with tf.variable_scope("generation"):
-            z_develop = dense(z, self.n_z, 7*7*32, scope='z_matrix')
-            z_matrix = tf.nn.relu(tf.reshape(z_develop, [self.batchsize, 7, 7, 32]))
-            h1 = tf.nn.relu(conv_transpose(z_matrix, [self.batchsize, 14, 14, 16], "g_h1"))
-            h2 = conv_transpose(h1, [self.batchsize, 28, 28, 1], "g_h2")
+            z_develop = dense(z, self.n_z, 8*8*64, scope='z_matrix')
+            z_matrix = tf.nn.relu(tf.reshape(z_develop, [self.batchsize, 8, 8, 64]))
+            h1 = tf.nn.relu(conv_transpose(z_matrix, [self.batchsize, 16, 16, 32], "g_h1"))
+            h1 = tf.nn.relu(conv_transpose(z_matrix, [self.batchsize, 32, 32, 16], "g_h1"))
+            h2 = conv_transpose(h1, [self.batchsize, 64, 64, 3], "g_h2")
             h2 = tf.nn.sigmoid(h2)
 
         return h2
