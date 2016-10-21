@@ -10,17 +10,15 @@ from glob import glob
 
 class LatentAttention():
     def __init__(self):
-        self.mnist = input_data.read_data_sets("MNIST_data/", one_hot=True)
-        self.n_samples = self.mnist.train.num_examples
 
         self.n_hidden = 500
-        self.n_z = 32
+        self.n_z = 200
         self.batchsize = 100
         self.num_colors = 3
         self.img_dim = 64
 
         self.images = tf.placeholder(tf.float32, [None, self.img_dim, self.img_dim, self.num_colors])
-        z_mean, z_stddev = self.recognition(self.images)
+        z_mean, z_stddev = self.encoder(self.images)
         samples = tf.random_normal([self.batchsize,self.n_z],0,1,dtype=tf.float32)
         guessed_z = z_mean + (z_stddev * samples)
 
@@ -29,60 +27,86 @@ class LatentAttention():
         self.images_flat = tf.reshape(self.images, [-1, self.img_dim*self.img_dim*self.num_colors])
         self.generated_images_flat = tf.reshape(self.generated_images, [-1, self.img_dim*self.img_dim*self.num_colors])
 
-        self.generation_loss = -tf.reduce_sum(self.images_flat * tf.log(1e-8 + self.generated_images_flat) + (1-self.images_flat) * tf.log(1e-8 + 1 - self.generated_images_flat),1)
+        # self.generation_loss = -tf.reduce_sum(self.images_flat * tf.log(1e-8 + self.generated_images_flat) + (1-self.images_flat) * tf.log(1e-8 + 1 - self.generated_images_flat),1)
+        self.generation_loss = tf.nn.l2_loss(self.images_flat - self.generated_images_flat)
+        self.generation_loss = self.generation_loss / (self.img_dim*self.img_dim*self.num_colors)
 
         self.latent_loss = 0.5 * tf.reduce_sum(tf.square(z_mean) + tf.square(z_stddev) - tf.log(tf.square(z_stddev)) - 1,1)
-        self.cost = tf.reduce_mean(self.generation_loss + self.latent_loss)
+        self.latent_loss = self.latent_loss / self.n_z
+        # self.latent_loss = self.latent_loss * 0.00
+
+        self.cost = tf.reduce_mean(self.generation_loss * 10 + self.latent_loss)
         self.optimizer = tf.train.AdamOptimizer(0.001).minimize(self.cost)
 
 
     # encoder
-    def recognition(self, input_images):
-        with tf.variable_scope("recognition"):
-            h1 = lrelu(conv2d(input_images, 1, 16, "d_h1")) # 64x64x1 -> 32x32x16
-            h2 = lrelu(conv2d(h1, 16, 32, "d_h2")) # 32x32x16 -> 16x16x32
-            h2 = lrelu(conv2d(h1, 16, 32, "d_h3")) # 16x16x32 -> 8x8x64
-            flattened = tf.reshape(h2,[self.batchsize, 8*8*64])
+    def encoder(self, input_images):
+        with tf.variable_scope("encoder"):
 
-            w_mean = dense(flattened, 8*8*64, self.n_z, "w_mean")
-            w_stddev = dense(flattened, 8*8*64, self.n_z, "w_stddev")
+            e_bn2 = batch_norm(name="e_bn2")
+            e_bn3 = batch_norm(name="e_bn3")
+
+            h1 = lrelu(conv2d(input_images, self.num_colors, 64, "e_h1")) # 64x64x3 -> 32x32x16
+            h2 = lrelu(e_bn2(conv2d(h1, 64, 128, "e_h2"))) # 32x32x16 -> 16x16x32
+            h3 = lrelu(e_bn3(conv2d(h2, 128, 256, "e_h3"))) # 16x16x32 -> 8x8x64
+            flattened = tf.reshape(h3,[self.batchsize, 8*8*256])
+            flattened = tf.nn.dropout(flattened, 0.5)
+
+            w_mean = dense(flattened, 8*8*256, self.n_z, "w_mean")
+            w_stddev = dense(flattened, 8*8*256, self.n_z, "w_stddev")
 
         return w_mean, w_stddev
 
     # decoder
     def generation(self, z):
         with tf.variable_scope("generation"):
-            z_develop = dense(z, self.n_z, 8*8*64, scope='z_matrix')
-            z_matrix = tf.nn.relu(tf.reshape(z_develop, [self.batchsize, 8, 8, 64]))
-            h1 = tf.nn.relu(conv_transpose(z_matrix, [self.batchsize, 16, 16, 32], "g_h1"))
-            h1 = tf.nn.relu(conv_transpose(z_matrix, [self.batchsize, 32, 32, 16], "g_h1"))
-            h2 = conv_transpose(h1, [self.batchsize, 64, 64, 3], "g_h2")
-            h2 = tf.nn.sigmoid(h2)
 
-        return h2
+            g_bn1 = batch_norm(name="g_bn1")
+            g_bn2 = batch_norm(name="g_bn2")
+            g_bn3 = batch_norm(name="g_bn3")
+
+            z_develop = dense(z, self.n_z, 8*8*256, scope='z_matrix')
+            z_matrix = tf.nn.relu(g_bn1(tf.reshape(z_develop, [self.batchsize, 8, 8, 256])))
+            h1 = tf.nn.relu(g_bn2(conv_transpose(z_matrix, [self.batchsize, 16, 16, 128], "g_h1")))
+            h2 = tf.nn.relu(g_bn3(conv_transpose(h1, [self.batchsize, 32, 32, 64], "g_h2")))
+            h3 = conv_transpose(h2, [self.batchsize, 64, 64, 3], "g_h3")
+            final = tf.nn.sigmoid(h3)
+
+        return final
 
     def train(self):
-        visualization = self.mnist.train.next_batch(self.batchsize)[0]
-        reshaped_vis = visualization.reshape(self.batchsize,28,28)
-        ims("results/base.jpg",merge(reshaped_vis[:64],[8,8]))
 
-        visualization = visualization.reshape(self.batchsize,28,28,1)
-        # train
+        data = glob(os.path.join("../Datasets/celebA", "*.jpg"))
+        base = np.array([get_image(sample_file, 108, is_crop=True) for sample_file in data[0:100]])
+        base += 1
+        base /= 2
+
+        np.set_printoptions(threshold=np.inf)
+        print base[0]
+
+        ims("results/base.jpg",merge(base,[10,10]))
+                # train
         saver = tf.train.Saver(max_to_keep=2)
         with tf.Session() as sess:
             sess.run(tf.initialize_all_variables())
             for epoch in range(10):
-                for idx in range(int(self.n_samples / self.batchsize)):
-                    batch = self.mnist.train.next_batch(self.batchsize)[0]
-                    batch = batch.reshape(-1,28,28,1)
-                    _, gen_loss, lat_loss = sess.run((self.optimizer, self.generation_loss, self.latent_loss), feed_dict={self.images: batch})
-                    # dumb hack to print cost every epoch
-                    if idx % (self.n_samples - 3) == 0:
-                        print "epoch %d: genloss %f latloss %f" % (epoch, np.mean(gen_loss), np.mean(lat_loss))
-                        saver.save(sess, os.getcwd()+"/training/train",global_step=epoch)
-                        generated_test = sess.run(self.generated_images, feed_dict={self.images: visualization})
-                        generated_test = generated_test.reshape(self.batchsize,28,28)
-                        ims("results/"+str(epoch)+".jpg",merge(generated_test[:64],[8,8]))
+                for idx in range(len(data) / self.batchsize):
+                    # load the images
+                    batch_files = data[idx*self.batchsize:(idx+1)*self.batchsize]
+                    batch = [get_image(batch_file, 108, is_crop=True) for batch_file in batch_files]
+                    batch_images = np.array(batch).astype(np.float32)
+                    batch_images += 1
+                    batch_images /= 2
+
+                    _, gen_loss, lat_loss, imgs = sess.run((self.optimizer, self.generation_loss, self.latent_loss, self.generated_images_flat), feed_dict={self.images: batch_images})
+                    print "iter %d: genloss %f latloss %f" % (epoch*10000 + idx, np.mean(gen_loss), np.mean(lat_loss))
+                    print np.amin(imgs)
+                    print np.amax(imgs)
+                    if idx % 100 == 0:
+
+                        # saver.save(sess, os.getcwd()+"/training/train",global_step=epoch)
+                        generated_test = sess.run(self.generated_images, feed_dict={self.images: base})
+                        ims("results/"+str(idx + epoch*10000)+".jpg",merge(generated_test,[10,10]))
 
 
 model = LatentAttention()
