@@ -23,7 +23,7 @@ class LatentAttention():
         samples = tf.random_normal([self.batchsize,self.n_z],0,1,dtype=tf.float32)
         guessed_z = z_mean + (z_stddev * samples)
 
-        self.generated_images = self.generation(guessed_z)
+        self.generated_images = self.recurrent_generation(guessed_z)
 
         self.images_flat = tf.reshape(self.images, [-1, self.img_dim*self.img_dim*self.num_colors])
         self.generated_images_flat = tf.reshape(self.generated_images, [-1, self.img_dim*self.img_dim*self.num_colors])
@@ -82,7 +82,7 @@ class LatentAttention():
 
             for t in xrange(self.sequence_length):
 
-                c_prev = tf.zeros((self.batch_size, self.img_dim, self.img_dim, self.num_colors)) if t == 0 else self.cs[t-1]
+                c_prev = tf.zeros((self.batchsize, self.img_dim, self.img_dim, self.num_colors)) if t == 0 else self.cs[t-1]
 
                 z_develop = dense(z, self.n_z, 8*8*256, scope='z_matrix')
                 z_matrix = tf.nn.relu(tf.reshape(z_develop, [self.batchsize, 8, 8, 256]))
