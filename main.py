@@ -16,6 +16,7 @@ class LatentAttention():
         self.batchsize = 100
         self.num_colors = 3
         self.img_dim = 64
+        self.sequence_length = 10
 
         self.images = tf.placeholder(tf.float32, [None, self.img_dim, self.img_dim, self.num_colors])
         z_mean, z_stddev = self.encoder(self.images)
@@ -27,7 +28,6 @@ class LatentAttention():
         self.images_flat = tf.reshape(self.images, [-1, self.img_dim*self.img_dim*self.num_colors])
         self.generated_images_flat = tf.reshape(self.generated_images, [-1, self.img_dim*self.img_dim*self.num_colors])
 
-        # self.generation_loss = -tf.reduce_sum(self.images_flat * tf.log(1e-8 + self.generated_images_flat) + (1-self.images_flat) * tf.log(1e-8 + 1 - self.generated_images_flat),1)
         self.generation_loss = tf.nn.l2_loss(self.images_flat - self.generated_images_flat)
         self.generation_loss = self.generation_loss / (self.img_dim*self.img_dim*self.num_colors)
 
@@ -74,6 +74,25 @@ class LatentAttention():
 
         return final
 
+    # decoder over multiple timesteps
+    def recurrent_generation(self, z):
+        with tf.variable_scope("generation"):
+
+            self.cs = [0] * self.sequence_length
+
+            for t in xrange(self.sequence_length):
+
+                c_prev = tf.zeros((self.batch_size, self.img_dim, self.img_dim, self.num_colors)) if t == 0 else self.cs[t-1]
+
+                z_develop = dense(z, self.n_z, 8*8*256, scope='z_matrix')
+                z_matrix = tf.nn.relu(tf.reshape(z_develop, [self.batchsize, 8, 8, 256]))
+                h1 = tf.nn.relu(conv_transpose(z_matrix, [self.batchsize, 16, 16, 128], "g_h1"))
+                h2 = tf.nn.relu(conv_transpose(h1, [self.batchsize, 32, 32, 64], "g_h2"))
+                h3 = conv_transpose(h2, [self.batchsize, 64, 64, 3], "g_h3")
+                self.cs[t] = c_prev + h3
+
+        return tf.nn.sigmoid(self.cs[-1])
+
     def train(self):
 
         data = glob(os.path.join("../Datasets/celebA", "*.jpg"))
@@ -102,11 +121,12 @@ class LatentAttention():
                     print "iter %d: genloss %f latloss %f" % (epoch*10000 + idx, np.mean(gen_loss), np.mean(lat_loss))
                     print np.amin(imgs)
                     print np.amax(imgs)
-                    if idx % 100 == 0:
+                    if idx % 10 == 0:
 
                         # saver.save(sess, os.getcwd()+"/training/train",global_step=epoch)
-                        generated_test = sess.run(self.generated_images, feed_dict={self.images: base})
-                        ims("results/"+str(idx + epoch*10000)+".jpg",merge(generated_test,[10,10]))
+                        generated_test = sess.run(self.cs, feed_dict={self.images: base})
+                        for t in xrange(self.sequence_length):
+                            ims("results/"+str(idx + epoch*10000)+"-"+str(t)+".jpg",merge(generated_test[t],[10,10]))
 
 
 model = LatentAttention()
