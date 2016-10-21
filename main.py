@@ -76,6 +76,9 @@ class LatentAttention():
 
     # decoder over multiple timesteps
     def recurrent_generation(self, z):
+
+        reuse_vars = False
+
         with tf.variable_scope("generation"):
 
             self.cs = [0] * self.sequence_length
@@ -84,12 +87,13 @@ class LatentAttention():
 
                 c_prev = tf.zeros((self.batchsize, self.img_dim, self.img_dim, self.num_colors)) if t == 0 else self.cs[t-1]
 
-                z_develop = dense(z, self.n_z, 8*8*256, scope='z_matrix')
+                z_develop = dense(z, self.n_z, 8*8*256, scope='z_matrix', reuse=reuse_vars)
                 z_matrix = tf.nn.relu(tf.reshape(z_develop, [self.batchsize, 8, 8, 256]))
-                h1 = tf.nn.relu(conv_transpose(z_matrix, [self.batchsize, 16, 16, 128], "g_h1"))
-                h2 = tf.nn.relu(conv_transpose(h1, [self.batchsize, 32, 32, 64], "g_h2"))
-                h3 = conv_transpose(h2, [self.batchsize, 64, 64, 3], "g_h3")
+                h1 = tf.nn.relu(conv_transpose(z_matrix, [self.batchsize, 16, 16, 128], "g_h1"), reuse=reuse_vars)
+                h2 = tf.nn.relu(conv_transpose(h1, [self.batchsize, 32, 32, 64], "g_h2"), reuse=reuse_vars)
+                h3 = conv_transpose(h2, [self.batchsize, 64, 64, 3], "g_h3", reuse=reuse_vars)
                 self.cs[t] = c_prev + h3
+                reuse_vars = True
 
         return tf.nn.sigmoid(self.cs[-1])
 

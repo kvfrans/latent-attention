@@ -55,6 +55,8 @@ def deconv2d(input_, output_shape,
              k_h=5, k_w=5, d_h=2, d_w=2, stddev=0.02,
              name="deconv2d"):
     with tf.variable_scope(name):
+        if reuse:
+            tf.get_variable_scope().reuse_variables()
         # filter : [height, width, output_channels, in_channels]
         w = tf.get_variable('w', [k_h, k_h, output_shape[-1], input_.get_shape()[-1]],
                             initializer=tf.random_normal_initializer(stddev=stddev))
@@ -74,8 +76,10 @@ def lrelu(x, leak=0.2, name="lrelu"):
         return f1 * x + f2 * abs(x)
 
 # fully-conected layer
-def dense(x, inputFeatures, outputFeatures, scope=None, with_w=False):
+def dense(x, inputFeatures, outputFeatures, scope=None, with_w=False, reuse=False):
     with tf.variable_scope(scope or "Linear"):
+        if reuse:
+            tf.get_variable_scope().reuse_variables()
         matrix = tf.get_variable("Matrix", [inputFeatures, outputFeatures], tf.float32, tf.random_normal_initializer(stddev=0.02))
         bias = tf.get_variable("bias", [outputFeatures], initializer=tf.constant_initializer(0.0))
         if with_w:
