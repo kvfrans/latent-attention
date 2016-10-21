@@ -89,8 +89,8 @@ class LatentAttention():
 
                 z_develop = dense(z, self.n_z, 8*8*256, scope='z_matrix', reuse=reuse_vars)
                 z_matrix = tf.nn.relu(tf.reshape(z_develop, [self.batchsize, 8, 8, 256]))
-                h1 = tf.nn.relu(conv_transpose(z_matrix, [self.batchsize, 16, 16, 128], "g_h1"), reuse=reuse_vars)
-                h2 = tf.nn.relu(conv_transpose(h1, [self.batchsize, 32, 32, 64], "g_h2"), reuse=reuse_vars)
+                h1 = tf.nn.relu(conv_transpose(z_matrix, [self.batchsize, 16, 16, 128], "g_h1", reuse=reuse_vars))
+                h2 = tf.nn.relu(conv_transpose(h1, [self.batchsize, 32, 32, 64], "g_h2", reuse=reuse_vars))
                 h3 = conv_transpose(h2, [self.batchsize, 64, 64, 3], "g_h3", reuse=reuse_vars)
                 self.cs[t] = c_prev + h3
                 reuse_vars = True
