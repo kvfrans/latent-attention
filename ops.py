@@ -43,8 +43,10 @@ def conv2d(x, inputFeatures, outputFeatures, name):
         conv = tf.nn.conv2d(x, w, strides=[1,2,2,1], padding="SAME") + b
         return conv
 
-def conv_transpose(x, outputShape, name):
+def conv_transpose(x, outputShape, name, reuse=True):
     with tf.variable_scope(name):
+        if reuse:
+            tf.get_variable_scope().reuse_variables()
         # h, w, out, in
         w = tf.get_variable("w",[5,5, outputShape[-1], x.get_shape()[-1]], initializer=tf.truncated_normal_initializer(stddev=0.02))
         b = tf.get_variable("b",[outputShape[-1]], initializer=tf.constant_initializer(0.0))
@@ -55,8 +57,6 @@ def deconv2d(input_, output_shape,
              k_h=5, k_w=5, d_h=2, d_w=2, stddev=0.02,
              name="deconv2d"):
     with tf.variable_scope(name):
-        if reuse:
-            tf.get_variable_scope().reuse_variables()
         # filter : [height, width, output_channels, in_channels]
         w = tf.get_variable('w', [k_h, k_h, output_shape[-1], input_.get_shape()[-1]],
                             initializer=tf.random_normal_initializer(stddev=stddev))
