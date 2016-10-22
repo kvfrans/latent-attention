@@ -3,7 +3,6 @@ import numpy as np
 import input_data
 import matplotlib.pyplot as plt
 import os
-from scipy.misc import imsave as ims
 from utils import *
 from ops import *
 from glob import glob
@@ -16,7 +15,7 @@ class LatentAttention():
         self.batchsize = 100
         self.num_colors = 3
         self.img_dim = 64
-        self.sequence_length = 10
+        self.sequence_length = 6
 
         self.images = tf.placeholder(tf.float32, [None, self.img_dim, self.img_dim, self.num_colors])
         z_mean, z_stddev = self.encoder(self.images)
@@ -24,6 +23,7 @@ class LatentAttention():
         guessed_z = z_mean + (z_stddev * samples)
 
         self.generated_images = self.recurrent_generation(guessed_z)
+        # self.generated_images = self.generation(guessed_z)
 
         self.images_flat = tf.reshape(self.images, [-1, self.img_dim*self.img_dim*self.num_colors])
         self.generated_images_flat = tf.reshape(self.generated_images, [-1, self.img_dim*self.img_dim*self.num_colors])
@@ -125,12 +125,17 @@ class LatentAttention():
                     print "iter %d: genloss %f latloss %f" % (epoch*10000 + idx, np.mean(gen_loss), np.mean(lat_loss))
                     print np.amin(imgs)
                     print np.amax(imgs)
-                    if idx % 10 == 0:
+                    if idx % 100 == 0:
 
-                        # saver.save(sess, os.getcwd()+"/training/train",global_step=epoch)
                         generated_test = sess.run(self.cs, feed_dict={self.images: base})
+                        print np.shape(generated_test)
+                        print np.sum(generated_test[0])
+                        print np.sum(generated_test[1])
                         for t in xrange(self.sequence_length):
-                            ims("results/"+str(idx + epoch*10000)+"-"+str(t)+".jpg",merge(generated_test[t],[10,10]))
+                            ims("results/"+str(idx + epoch*10000)+"-"+str(t)+".jpg",merge(sigmoid(generated_test[t]),[10,10]))
+
+                        # generated_test = sess.run(self.generated_images, feed_dict={self.images: base})
+                        # ims("results/"+str(idx + epoch*10000)+".jpg",merge(generated_test,[10,10]))
 
 
 model = LatentAttention()

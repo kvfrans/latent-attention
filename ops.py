@@ -43,7 +43,7 @@ def conv2d(x, inputFeatures, outputFeatures, name):
         conv = tf.nn.conv2d(x, w, strides=[1,2,2,1], padding="SAME") + b
         return conv
 
-def conv_transpose(x, outputShape, name, reuse=True):
+def conv_transpose(x, outputShape, name, reuse=False):
     with tf.variable_scope(name):
         if reuse:
             tf.get_variable_scope().reuse_variables()
